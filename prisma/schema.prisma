@@ -1,0 +1,174 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/* ================= ENUMS ================= */
+
+enum Role {
+  FARMER
+  BUYER
+  ADMIN
+}
+
+enum CropStatus {
+  GROWING
+  HARVESTED
+  FAILED
+}
+
+enum LogType {
+  IRRIGATION
+  FERTILIZER
+  PEST_CONTROL
+  OTHER
+}
+
+enum ExpenseCategory {
+  SEEDS
+  FERTILIZER
+  LABOR
+  MACHINERY
+  OTHER
+}
+
+enum Priority {
+  URGENT
+  WARNING
+  NORMAL
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  DELIVERED
+  CANCELLED
+}
+
+enum WaterSourceType {
+  BOREWELL
+  CANAL
+  RAIN
+  RIVER
+  OTHER
+}
+
+/* ================= MODELS ================= */
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String   @unique
+  role      Role     @default(FARMER)
+  language  String   @default("en")
+  createdAt DateTime @default(now())
+
+  farms     Farm[]
+  products  Product[]
+  orders    Order[]
+}
+
+model Farm {
+  id           String   @id @default(uuid())
+  name         String
+  location     String
+  soilType     String?
+  waterSource  WaterSourceType?
+  latitude     Float?
+  longitude    Float?
+  userId       String
+  createdAt    DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  crops  Crop[]
+}
+
+model Crop {
+  id              String   @id @default(uuid())
+  name            String
+  variety         String?
+  sowingDate      DateTime
+  expectedHarvest DateTime
+  status          CropStatus @default(GROWING)
+  farmId          String
+  createdAt       DateTime @default(now())
+
+  farm            Farm             @relation(fields: [farmId], references: [id])
+  logs            CropLog[]
+  expenses        Expense[]
+  recommendations Recommendation[]
+}
+
+model CropLog {
+  id        String   @id @default(uuid())
+  cropId    String
+  type      LogType
+  note      String?
+  createdAt DateTime @default(now())
+
+  crop Crop @relation(fields: [cropId], references: [id])
+}
+
+model Expense {
+  id        String   @id @default(uuid())
+  cropId    String
+  amount    Float
+  category  ExpenseCategory
+  note      String?
+  createdAt DateTime @default(now())
+
+  crop Crop @relation(fields: [cropId], references: [id])
+}
+
+model Recommendation {
+  id        String   @id @default(uuid())
+  cropId    String
+  message   String
+  priority  Priority
+  createdAt DateTime @default(now())
+
+  crop Crop @relation(fields: [cropId], references: [id])
+}
+
+model Product {
+  id        String   @id @default(uuid())
+  name      String
+  quantity  Float
+  price     Float
+  location  String
+  userId    String
+  createdAt DateTime @default(now())
+
+  user       User        @relation(fields: [userId], references: [id])
+  orderItems OrderItem[]
+}
+
+model Order {
+  id         String   @id @default(uuid())
+  buyerId    String
+  status     OrderStatus @default(PENDING)
+  totalPrice Float
+  createdAt  DateTime @default(now())
+
+  buyer User        @relation(fields: [buyerId], references: [id])
+  items OrderItem[]
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  orderId   String
+  productId String
+  quantity  Float
+
+  order   Order   @relation(fields: [orderId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}
