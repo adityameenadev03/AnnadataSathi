@@ -1,3 +1,4 @@
+import { auth } from "@/lib/auth/server";
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
@@ -20,8 +21,39 @@ const stringToOwnership = (type: string) => {
   }
 };
 
+export async function GET(req: Request) {
+  try {
+    const { data: session } = await auth.getSession();
+
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const farms = await prisma.farm.findMany({
+      where: { userId: session.user.id },
+      include: {
+        _count: {
+          select: { crops: { where: { status: 'GROWING' } } }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    return NextResponse.json(farms);
+  } catch (err) {
+    console.error("Fetch farms error:", err);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
+}
+
 export async function POST(req: Request) {
   try {
+    const { data: session } = await auth.getSession();
+
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
     const { name, location, latitude, longitude, sizeInAcres, waterSource, ownershipType } = body;
 
@@ -29,7 +61,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    console.log(prisma.farm)
+    // 1. Ensure the user exists in our public.user table (Self-healing sync)
+    // This fixed the ForeignKeyConstraintViolation error.
+    await prisma.user.upsert({
+      where: { id: session.user.id },
+      update: { 
+        name: session.user.name, 
+        email: session.user.email 
+      },
+      create: { 
+        id: session.user.id, 
+        name: session.user.name, 
+        email: session.user.email 
+      },
+    });
+
+    console.log("Creating farm for user:", session.user.id);
 
     const farm = await prisma.farm.create({
       data: {
@@ -40,12 +87,13 @@ export async function POST(req: Request) {
         sizeInAcres: parseFloat(sizeInAcres),
         waterSource: stringToWaterSource(waterSource),
         ownershipType: stringToOwnership(ownershipType),
+        userId: session.user.id,
       }
     });
 
-    return NextResponse.json({ success: true, farm }, { status: 201 });
-  } catch (error) {
-    console.error("Failed to save farm:", error);
+    return NextResponse.json(farm);
+  } catch (err) {
+    console.error("Save farm error:", err);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }

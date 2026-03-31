@@ -71,9 +71,9 @@ enum OwnershipType {
 /* ================= MODELS ================= */
 
 model User {
-  id        String   @id @default(uuid())
+  id        String   @id
   name      String
-  phone     String   @unique
+  email     String   @unique
   role      Role     @default(FARMER)
   language  String   @default("en")
   createdAt DateTime @default(now())
@@ -93,10 +93,10 @@ model Farm {
   sizeInAcres   Float?
   latitude      Float?
   longitude     Float?
-  userId        String?
+  userId        String
   createdAt     DateTime @default(now())
 
-  user   User?  @relation(fields: [userId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
   crops  Crop[]
 }
 

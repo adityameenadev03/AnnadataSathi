@@ -2,11 +2,14 @@
 
 import { ArrowLeft, MapPin, Tractor, ArrowRight, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 
 export default function AddFarmPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const farmId = searchParams.get("id");
+  const isEditMode = !!farmId;
   
   const [waterSource, setWaterSource] = useState("Tube well");
   const [ownership, setOwnership] = useState("Owned");
@@ -24,6 +27,7 @@ export default function AddFarmPage() {
   const [locationResults, setLocationResults] = useState<any[]>([]);
   const [isSearchingLocation, setIsSearchingLocation] = useState(false);
   const [isGettingGPS, setIsGettingGPS] = useState(false);
+  const [isLoadingFarm, setIsLoadingFarm] = useState(isEditMode);
   const [showDropdown, setShowDropdown] = useState(false);
   const locationRef = useRef<HTMLDivElement>(null);
 
@@ -31,6 +35,32 @@ export default function AddFarmPage() {
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [isSaving, setIsSaving] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  // Fetch farm data for editing
+  useEffect(() => {
+    if (isEditMode) {
+      const fetchFarm = async () => {
+        try {
+          const res = await fetch(`/api/farms/${farmId}`);
+          if (res.ok) {
+            const farm = await res.json();
+            setFarmName(farm.name);
+            setLocationQuery(farm.location);
+            setTotalSize(farm.sizeInAcres.toString());
+            setLatitude(farm.latitude);
+            setLongitude(farm.longitude);
+            setWaterSource(farm.waterSource === 'BOREWELL' ? 'Tube well' : farm.waterSource === 'CANAL' ? 'Canal' : 'Rainfed');
+            setOwnership(farm.ownershipType === 'OWNED' ? 'Owned' : farm.ownershipType === 'LEASED' ? 'Leased' : 'Shared');
+          }
+        } catch (err) {
+          console.error("Failed to load farm details", err);
+        } finally {
+          setIsLoadingFarm(false);
+        }
+      };
+      fetchFarm();
+    }
+  }, [isEditMode, farmId]);
 
   // Debounce and search for locations (Nominatim)
   useEffect(() => {
@@ -166,8 +196,11 @@ export default function AddFarmPage() {
     };
 
     try {
-      const res = await fetch("/api/farms", {
-        method: "POST",
+      const url = isEditMode ? `/api/farms/${farmId}` : "/api/farms";
+      const method = isEditMode ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method: method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(farmData),
       });
@@ -175,7 +208,7 @@ export default function AddFarmPage() {
       if (res.ok) {
         setSuccess(true);
         setTimeout(() => {
-          router.push("/home"); // Redirect to home on success
+          router.push("/farms"); // Redirect to farms list on success
         }, 1500);
       } else {
         const errorData = await res.json();
@@ -189,6 +222,14 @@ export default function AddFarmPage() {
     }
   };
 
+  if (isLoadingFarm) {
+    return (
+      <div className="min-h-screen bg-[#F8FAF7] flex items-center justify-center">
+        <Loader2 className="w-10 h-10 text-[#238B50] animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAF7] text-slate-800 pb-24 font-sans relative flex flex-col items-center">
       <div className="w-full max-w-md mx-auto relative">
@@ -199,23 +240,24 @@ export default function AddFarmPage() {
             <div className="w-20 h-20 bg-[#238B50] rounded-full flex items-center justify-center mb-4 shadow-lg">
               <CheckCircle2 size={40} className="text-white" strokeWidth={2.5} />
             </div>
-            <h2 className="text-2xl font-bold text-slate-900">Farm Added!</h2>
-            <p className="text-slate-600 mt-2 font-medium">Redirecting you to home...</p>
+            <h2 className="text-2xl font-bold text-slate-900">{isEditMode ? 'Farm Updated!' : 'Farm Added!'}</h2>
+            <p className="text-slate-600 mt-2 font-medium">Redirecting you to farms list...</p>
           </div>
         )}
 
         {/* Header */}
-        <div className="px-5 pt-6 pb-2 mb-2 w-full">
-          <Link 
-            href="/home" 
+        <div className="px-5 pt-6 pb-2 mb-2 w-full text-slate-800">
+          <button 
+            type="button"
+            onClick={() => router.back()} 
             className="w-11 h-11 bg-white rounded-[14px] flex items-center justify-center border border-slate-200/60 shadow-sm text-slate-700 hover:bg-slate-50 transition-colors"
           >
             <ArrowLeft size={20} strokeWidth={2.5} />
-          </Link>
+          </button>
           <div className="mt-5">
-            <h1 className="text-[28px] font-bold tracking-tight text-slate-900">Add Farm</h1>
+            <h1 className="text-[28px] font-bold tracking-tight text-slate-900">{isEditMode ? 'Edit Farm' : 'Add Farm'}</h1>
             <p className="text-slate-500 text-[15px] mt-1.5 leading-snug pr-4">
-              Enter your basic farm details to get started.
+              {isEditMode ? 'Modify your farm details below.' : 'Enter your basic farm details to get started.'}
             </p>
           </div>
           
@@ -420,11 +462,11 @@ export default function AddFarmPage() {
               {isSaving ? (
                 <>
                   <Loader2 className="animate-spin" size={20} />
-                  <span>Saving...</span>
+                  <span>{isEditMode ? 'Updating...' : 'Saving...'}</span>
                 </>
               ) : (
                 <>
-                  <span>Save Farm</span>
+                  <span>{isEditMode ? 'Update Farm' : 'Save Farm'}</span>
                   <ArrowRight size={20} className="stroke-[2.5]" />
                 </>
               )}
