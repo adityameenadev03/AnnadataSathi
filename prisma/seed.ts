@@ -25,8 +25,24 @@ const cropData = [
 ]
 
 export async function main() {
+    const farm = await prisma.farm.create({
+        data: {
+            name: "Main Farm",
+            location: "Default Location",
+            sizeInAcres: 10,
+        }
+    });
+
     for (const u of cropData) {
-        await prisma.crop.create({ data: u });
+        await prisma.crop.create({
+            data: {
+                name: u.name,
+                sowingDate: u.sowingDate,
+                expectedHarvest: u.expectedHarvest,
+                status: u.status.toUpperCase() as any,
+                farmId: farm.id
+            }
+        });
     }
 }
 main();
